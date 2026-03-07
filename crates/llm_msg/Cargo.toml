@@ -1,0 +1,5 @@
+[package]
+name = "llm_msg"
+version = "0.1.0"
+description = "convert input to LLM message"
+edition = "2024"
