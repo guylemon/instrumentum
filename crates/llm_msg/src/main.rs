@@ -1,16 +1,10 @@
+use llm_msg::Message;
 use std::env;
 use std::io::{self};
-use serde::Serialize;
-
-#[derive(Serialize)]
-struct Message {
-    role: String,
-    content: String,
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    
+
     if args.len() > 1 {
         // Use first positional arg as input
         let input = &args[1];
@@ -25,13 +19,10 @@ fn main() {
 }
 
 fn process_input(input: &str) {
-    let role = "user".to_string();
-    let content = input.to_string();
+    let role = "user";
+    let content = input;
 
-    let msg = Message {
-        role,
-        content
-    };
+    let msg = Message::new(role, content);
 
     let json = serde_json::to_string(&msg).unwrap();
 
