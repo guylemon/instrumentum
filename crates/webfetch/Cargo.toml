@@ -1,0 +1,19 @@
+[package]
+name = "webfetch"
+version = "0.1.0"
+description = "retrieve the contents of a website as markdown and save to local cache"
+edition = "2024"
+
+[lints.clippy]
+complexity   = { priority = -1, level = "deny" }
+correctness  = { priority = -1, level = "deny" }
+pedantic     = { priority = -1, level = "deny" }
+perf         = { priority = -1, level = "deny" }
+style        = { priority = -1, level = "deny" }
+suspicious   = { priority = -1, level = "deny" }
+
+[dependencies]
+dirs = "5"
+md5 = "0.7"
+readability = "0.3"
+html-to-markdown-rs = "2"
