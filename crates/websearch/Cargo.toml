@@ -1,0 +1,18 @@
+[package]
+name = "websearch"
+version = "0.1.0"
+description = "get search results for provided query"
+edition = "2024"
+
+[lints.clippy]
+complexity   = { priority = -1, level = "deny" }
+correctness  = { priority = -1, level = "deny" }
+pedantic     = { priority = -1, level = "deny" }
+perf         = { priority = -1, level = "deny" }
+style        = { priority = -1, level = "deny" }
+suspicious   = { priority = -1, level = "deny" }
+
+[dependencies]
+reqwest = { version = "0.13", features = ["json", "blocking", "form"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
