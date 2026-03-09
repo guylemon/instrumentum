@@ -8,6 +8,6 @@ while true; do
   echo $prompt | llm_msg >> chat.jsonl
   cat chat.jsonl | llm_generate >> chat.jsonl
   echo ""
-  tail -1 chat.jsonl
+  tail -1 chat.jsonl | llm_display
   echo ""
 done
