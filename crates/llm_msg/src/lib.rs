@@ -1,9 +1,24 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Message {
     pub role: String,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ToolCall {
+    pub function: Function,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub arguments: serde_json::Value,
 }
 
 impl Message {
@@ -12,6 +27,8 @@ impl Message {
         Message {
             role: role.to_string(),
             content: content.to_string(),
+            tool_calls: None,
+            tool_name: None,
         }
     }
 }
