@@ -1,15 +1,21 @@
 use llm_msg::Message;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::io::{self};
+use std::io::{self, Write};
 use std::time::Duration;
+
+#[derive(Serialize)]
+struct ChatRequestOptions {
+    temperature: u8,
+}
 
 #[derive(Serialize)]
 struct ChatRequest {
     model: String,
     messages: Vec<Message>,
-    tools: Option<Vec<Tool>>,
+    options: ChatRequestOptions,
     stream: bool,
+    tools: Option<Vec<Tool>>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +77,24 @@ fn process_input(input: &[String]) -> Result<String, Box<dyn std::error::Error>>
                 "required": ["queries"]
             }),
         },
+    },
+    Tool {
+        r#type: "function".to_string(),
+        function: FunctionDef {
+            name: "webfetch".to_string(),
+            description: "Fetch the content of URLs and convert to markdown. Use this after a web search when you want to get more detailed content from specific URLs.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "urls": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "URLs to fetch content from"
+                    }
+                },
+                "required": ["urls"]
+            }),
+        },
     }];
 
     let mut all_messages = messages;
@@ -128,7 +152,28 @@ fn execute_tool(
                 .stdout(std::process::Stdio::piped())
                 .spawn()?;
 
-            use std::io::Write;
+            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
+
+            let output = child.wait_with_output()?;
+
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        }
+        "webfetch" => {
+            let urls: Vec<String> = args["urls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+
+            eprintln!("...fetching URLs: {urls:?}");
+
+            let input = urls.join("\n");
+            let mut child = std::process::Command::new("webfetch")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()?;
+
             child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
 
             let output = child.wait_with_output()?;
@@ -145,9 +190,10 @@ fn chat_with_llm(
     tools: Option<Vec<Tool>>,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     let request = ChatRequest {
-        model: "granite4:3b".to_string(),
+        model: "qwen3:8b".to_string(),
         messages,
         tools,
+        options: ChatRequestOptions { temperature: 0 },
         stream: false,
     };
 
