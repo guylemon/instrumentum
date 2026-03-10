@@ -4,6 +4,12 @@ use serde_json::json;
 use std::io::{self, Write};
 use std::time::Duration;
 
+#[derive(Clone)]
+enum Provider {
+    Ollama,
+    Xai { api_key: String, model: String },
+}
+
 #[derive(Serialize)]
 struct ChatRequestOptions {
     temperature: u8,
@@ -23,6 +29,16 @@ struct ChatResponse {
     message: Option<Message>,
 }
 
+#[derive(Deserialize)]
+struct XaiChatResponse {
+    choices: Vec<XaiChoice>,
+}
+
+#[derive(Deserialize)]
+struct XaiChoice {
+    message: Message,
+}
+
 #[derive(Serialize, Clone)]
 struct Tool {
     r#type: String,
@@ -36,15 +52,36 @@ struct FunctionDef {
     parameters: serde_json::Value,
 }
 
+fn parse_args() -> Provider {
+    let args: Vec<String> = std::env::args().collect();
+    let mut provider = Provider::Ollama;
+
+    for i in 0..args.len().saturating_sub(1) {
+        if args[i] == "--provider" && args[i + 1] == "xai" {
+            let api_key = std::env::var("XAI_API_KEY")
+                .expect("XAI_API_KEY environment variable must be set when using --provider xai");
+            let model = std::env::var("XAI_MODEL")
+                .unwrap_or_else(|_| "grok-4-1-fast-reasoning".to_string());
+            provider = Provider::Xai { api_key, model };
+        }
+    }
+
+    provider
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lines().map_while(Result::ok).collect();
-    let response = process_input(&lines)?;
+    let provider = parse_args();
+    let response = process_input(&lines, provider)?;
     println!("{response}");
     Ok(())
 }
 
-fn process_input(input: &[String]) -> Result<String, Box<dyn std::error::Error>> {
+fn process_input(
+    input: &[String],
+    provider: Provider,
+) -> Result<String, Box<dyn std::error::Error>> {
     // Collect messages from input
     let messages: Vec<Message> = input
         .iter()
@@ -99,7 +136,12 @@ fn process_input(input: &[String]) -> Result<String, Box<dyn std::error::Error>>
 
     let mut all_messages = messages;
     let final_response = loop {
-        let response = chat_with_llm(&client, all_messages.clone(), Some(tools.clone()))?;
+        let response = chat_with_llm(
+            &client,
+            all_messages.clone(),
+            Some(tools.clone()),
+            provider.clone(),
+        )?;
         all_messages.push(response.clone());
 
         if let Some(ref tool_calls) = response.tool_calls {
@@ -108,6 +150,7 @@ fn process_input(input: &[String]) -> Result<String, Box<dyn std::error::Error>>
             }
 
             for tc in tool_calls {
+                let id = tc.id.clone();
                 let name = tc.function.name.clone();
                 let args = tc.function.arguments.clone();
                 eprintln!("...calling tool: {name}({args:?})");
@@ -117,6 +160,7 @@ fn process_input(input: &[String]) -> Result<String, Box<dyn std::error::Error>>
                 all_messages.push(Message {
                     role: "tool".to_string(),
                     content: result,
+                    tool_call_id: id,
                     tool_name: Some(name),
                     tool_calls: None,
                 });
@@ -135,6 +179,14 @@ fn execute_tool(
     name: &str,
     args: &serde_json::Value,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let args = match args {
+        serde_json::Value::Object(_) => args.clone(),
+        serde_json::Value::String(s) => {
+            serde_json::from_str(s).map_err(|e| format!("Failed to parse tool arguments: {e}"))?
+        }
+        _ => return Err("Invalid arguments format".into()),
+    };
+
     match name {
         "websearch" => {
             let queries: Vec<String> = args["queries"]
@@ -188,6 +240,20 @@ fn chat_with_llm(
     client: &reqwest::blocking::Client,
     messages: Vec<Message>,
     tools: Option<Vec<Tool>>,
+    provider: Provider,
+) -> Result<Message, Box<dyn std::error::Error>> {
+    match provider {
+        Provider::Ollama => chat_with_ollama(client, messages, tools),
+        Provider::Xai { api_key, model } => {
+            chat_with_xai(client, messages, tools, &api_key, &model)
+        }
+    }
+}
+
+fn chat_with_ollama(
+    client: &reqwest::blocking::Client,
+    messages: Vec<Message>,
+    tools: Option<Vec<Tool>>,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     let request = ChatRequest {
         model: "qwen3:8b".to_string(),
@@ -215,6 +281,44 @@ fn chat_with_llm(
 
     if let Some(msg) = chat_resp.message {
         Ok(msg)
+    } else {
+        Err("No response from LLM".into())
+    }
+}
+
+fn chat_with_xai(
+    client: &reqwest::blocking::Client,
+    messages: Vec<Message>,
+    tools: Option<Vec<Tool>>,
+    api_key: &str,
+    model: &str,
+) -> Result<Message, Box<dyn std::error::Error>> {
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages,
+        tools,
+        options: ChatRequestOptions { temperature: 0 },
+        stream: false,
+    };
+
+    let response = client
+        .post("https://api.x.ai/v1/chat/completions")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .map_err(|e| format!("Request failed: {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response.text().unwrap_or_default();
+        return Err(format!("XAI error {status}: {error_text}").into());
+    }
+
+    let chat_resp: XaiChatResponse = response.json()?;
+
+    if let Some(choice) = chat_resp.choices.into_iter().next() {
+        Ok(choice.message)
     } else {
         Err("No response from LLM".into())
     }
