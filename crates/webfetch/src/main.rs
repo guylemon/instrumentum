@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 const MAX_REFERENCE_CHARS: usize = 60000;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let stdin = io::stdin();
     let urls: Vec<String> = stdin.lines().map_while(Result::ok).collect();
     let mut response: String = String::new();
@@ -24,7 +24,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Warning: {} URL(s) failed to fetch", failed_urls.len());
     }
     println!("{response}");
-    Ok(())
 }
 
 fn get_cache_dir() -> PathBuf {

@@ -77,14 +77,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lines().map_while(Result::ok).collect();
     let (provider, tools_enabled) = parse_args();
-    let response = process_input(&lines, provider, tools_enabled)?;
+    let response = process_input(&lines, &provider, tools_enabled)?;
     println!("{response}");
     Ok(())
 }
 
 fn process_input(
     input: &[String],
-    provider: Provider,
+    provider: &Provider,
     tools_enabled: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Collect messages from input
@@ -180,8 +180,6 @@ fn process_input(
             break response;
         }
     };
-
-    let json = serde_json::to_string(&final_response)?;
 
     let json = serde_json::to_string(&final_response)?;
 
