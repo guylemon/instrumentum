@@ -7,10 +7,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdin = io::stdin();
     let urls: Vec<String> = stdin.lines().map_while(Result::ok).collect();
     let mut response: String = String::new();
+    let mut failed_urls: Vec<String> = Vec::new();
     for url in urls {
-        let markdown = fetch_html(&url)?;
-        response.push_str(format!("\n\n--url:{url}\n\n").as_str());
-        response.push_str(markdown.as_str());
+        match fetch_html(&url) {
+            Ok(markdown) => {
+                response.push_str(format!("\n\n--url:{url}\n\n").as_str());
+                response.push_str(markdown.as_str());
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to fetch {url}: {e}");
+                failed_urls.push(url);
+            }
+        }
+    }
+    if !failed_urls.is_empty() {
+        eprintln!("Warning: {} URL(s) failed to fetch", failed_urls.len());
     }
     println!("{response}");
     Ok(())
