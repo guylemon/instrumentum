@@ -52,9 +52,10 @@ struct FunctionDef {
     parameters: serde_json::Value,
 }
 
-fn parse_args() -> Provider {
+fn parse_args() -> (Provider, bool) {
     let args: Vec<String> = std::env::args().collect();
     let mut provider = Provider::Ollama;
+    let mut tools_enabled = false;
 
     for i in 0..args.len().saturating_sub(1) {
         if args[i] == "--provider" && args[i + 1] == "xai" {
@@ -64,16 +65,19 @@ fn parse_args() -> Provider {
                 .unwrap_or_else(|_| "grok-4-1-fast-reasoning".to_string());
             provider = Provider::Xai { api_key, model };
         }
+        if args[i] == "--tools" {
+            tools_enabled = true;
+        }
     }
 
-    provider
+    (provider, tools_enabled)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lines().map_while(Result::ok).collect();
-    let provider = parse_args();
-    let response = process_input(&lines, provider)?;
+    let (provider, tools_enabled) = parse_args();
+    let response = process_input(&lines, provider, tools_enabled)?;
     println!("{response}");
     Ok(())
 }
@@ -81,6 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn process_input(
     input: &[String],
     provider: Provider,
+    tools_enabled: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Collect messages from input
     let messages: Vec<Message> = input
@@ -95,51 +100,57 @@ fn process_input(
         .timeout(Duration::from_secs(120))
         .build()?;
 
-    let tools = vec![Tool {
-        r#type: "function".to_string(),
-        function: FunctionDef {
-            name: "websearch".to_string(),
-            description:
-                "Search the web using SearxNG. Input should be an array of search queries."
-                    .to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "queries": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "Search queries"
-                    }
-                },
-                "required": ["queries"]
-            }),
+    let tools = if tools_enabled {
+        vec![Tool {
+            r#type: "function".to_string(),
+            function: FunctionDef {
+                name: "websearch".to_string(),
+                description:
+                    "Search the web using SearxNG. Input should be an array of search queries."
+                        .to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "queries": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Search queries"
+                        }
+                    },
+                    "required": ["queries"]
+                }),
+            },
         },
-    },
-    Tool {
-        r#type: "function".to_string(),
-        function: FunctionDef {
-            name: "webfetch".to_string(),
-            description: "Fetch the content of URLs and convert to markdown. Use this after a web search when you want to get more detailed content from specific URLs.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "urls": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "URLs to fetch content from"
-                    }
-                },
-                "required": ["urls"]
-            }),
-        },
-    }];
+        Tool {
+            r#type: "function".to_string(),
+            function: FunctionDef {
+                name: "webfetch".to_string(),
+                description: "Fetch the content of URLs and convert to markdown. Use this after a web search when you want to get more detailed content from specific URLs.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "urls": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "URLs to fetch content from"
+                        }
+                    },
+                    "required": ["urls"]
+                }),
+            },
+        }]
+    } else {
+        vec![]
+    };
+
+    let tools = if tools_enabled { Some(tools) } else { None };
 
     let mut all_messages = messages;
     let final_response = loop {
         let response = chat_with_llm(
             &client,
             all_messages.clone(),
-            Some(tools.clone()),
+            tools.clone(),
             provider.clone(),
         )?;
         all_messages.push(response.clone());
@@ -169,6 +180,8 @@ fn process_input(
             break response;
         }
     };
+
+    let json = serde_json::to_string(&final_response)?;
 
     let json = serde_json::to_string(&final_response)?;
 
