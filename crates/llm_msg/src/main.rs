@@ -1,15 +1,16 @@
 use llm_msg::Message;
 use std::env;
-use std::io::{self};
+use std::io::{self, Read};
 
 fn main() {
     let (role, msg) = parse_args();
 
     if msg.is_empty() {
         // Fall back to stdin for message
-        let stdin = io::stdin();
-        for input in stdin.lines().map_while(Result::ok) {
-            process_input(&input, &role);
+        let mut full_input = String::new();
+        io::stdin().read_to_string(&mut full_input).ok();
+        if !full_input.is_empty() {
+            process_input(&full_input, &role);
         }
     } else {
         process_input(&msg, &role);
