@@ -1,6 +1,6 @@
-use std::time::Duration;
-use std::io;
 use serde::{Deserialize, Serialize};
+use std::io;
+use std::time::Duration;
 
 const SEARXNG_URL: &str = "http://localhost:8888/search";
 
@@ -24,9 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn process_input(
-    queries: Vec<String>
-) -> Result<String, Box<dyn std::error::Error>> {
+fn process_input(queries: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
     let mut results: Vec<SearxngResult> = vec![];
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(120))
