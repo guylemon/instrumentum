@@ -52,10 +52,11 @@ struct FunctionDef {
     parameters: serde_json::Value,
 }
 
-fn parse_args() -> (Provider, bool) {
+fn parse_args() -> (Provider, bool, Option<String>) {
     let args: Vec<String> = std::env::args().collect();
     let mut provider = Provider::Ollama;
     let mut tools_enabled = false;
+    let mut context_file = None;
 
     for i in 0..args.len().saturating_sub(1) {
         if args[i] == "--provider" && args[i + 1] == "xai" {
@@ -68,17 +69,34 @@ fn parse_args() -> (Provider, bool) {
         if args[i] == "--tools" {
             tools_enabled = true;
         }
+        if args[i] == "--context" {
+            context_file = Some(args[i + 1].clone());
+        }
     }
 
-    (provider, tools_enabled)
+    (provider, tools_enabled, context_file)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let stdin = io::stdin();
-    let lines: Vec<String> = stdin.lines().map_while(Result::ok).collect();
-    let (provider, tools_enabled) = parse_args();
-    let response = process_input(&lines, &provider, tools_enabled)?;
-    println!("{response}");
+    let (provider, tools_enabled, context_file) = parse_args();
+
+    if let Some(path) = context_file {
+        let lines: Vec<String> = std::fs::read_to_string(&path)?
+            .lines()
+            .map(String::from)
+            .collect();
+        let response = process_input(&lines, &provider, tools_enabled)?;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
+        writeln!(file, "{response}")?;
+    } else {
+        let stdin = io::stdin();
+        let lines: Vec<String> = stdin.lines().map_while(Result::ok).collect();
+        let response = process_input(&lines, &provider, tools_enabled)?;
+        println!("{response}");
+    }
     Ok(())
 }
 
