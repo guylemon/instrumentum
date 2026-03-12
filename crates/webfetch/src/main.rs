@@ -1,15 +1,22 @@
-use std::io;
 use std::path::PathBuf;
+use std::{env, io};
 
 const MAX_REFERENCE_CHARS: usize = 60000;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let use_tavily = args
+        .iter()
+        .any(|arg| arg == "--provider" && args.iter().any(|a| a == "tavily"));
+
     let stdin = io::stdin();
     let urls: Vec<String> = stdin.lines().map_while(Result::ok).collect();
     let mut response: String = String::new();
     let mut failed_urls: Vec<String> = Vec::new();
     for url in urls {
-        match fetch_html(&url) {
+        let fetch_fn: fn(&str) -> Result<String, Box<dyn std::error::Error>> =
+            if use_tavily { fetch_tavily } else { fetch_html };
+        match fetch_fn(&url) {
             Ok(markdown) => {
                 response.push_str(format!("\n\n--url:{url}\n\n").as_str());
                 response.push_str(markdown.as_str());
@@ -99,4 +106,73 @@ fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 
     cache_result(url, &markdown);
     Ok(markdown)
+}
+
+#[derive(serde::Deserialize)]
+struct TavilyResponse {
+    results: Vec<TavilyResult>,
+    failed_results: Vec<TavilyFailedResult>,
+}
+
+#[derive(serde::Deserialize)]
+struct TavilyResult {
+    #[allow(dead_code)]
+    url: String,
+    raw_content: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TavilyFailedResult {
+    url: String,
+    error: String,
+}
+
+fn fetch_tavily(url: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(cached) = get_cached(url) {
+        return Ok(cached);
+    }
+
+    let api_key =
+        env::var("TAVILY_API_KEY").map_err(|_| "TAVILY_API_KEY environment variable not set")?;
+
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post("https://api.tavily.com/extract")
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&serde_json::json!({
+            "urls": [url],
+            "format": "markdown"
+        }))
+        .send()?;
+
+    if !response.status().is_success() {
+        return Err(format!("Tavily API error: {}", response.status()).into());
+    }
+
+    let tavily_response: TavilyResponse = response.json()?;
+
+    if !tavily_response.failed_results.is_empty() {
+        for failed in &tavily_response.failed_results {
+            eprintln!(
+                "Warning: Tavily failed to extract {}: {}",
+                failed.url, failed.error
+            );
+        }
+    }
+
+    let content = tavily_response
+        .results
+        .first()
+        .ok_or("No results returned from Tavily")?
+        .raw_content
+        .clone();
+
+    let truncated = if content.chars().count() > MAX_REFERENCE_CHARS {
+        content.chars().take(MAX_REFERENCE_CHARS).collect()
+    } else {
+        content
+    };
+
+    cache_result(url, &truncated);
+    Ok(truncated)
 }
