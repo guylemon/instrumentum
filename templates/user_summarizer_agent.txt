@@ -1,0 +1,8 @@
+**Research Topic:** 
+{{TOPIC}}
+
+**Sources to analyze:**
+
+{{SOURCES}}
+
+Please synthesize the key facts, statistics, main arguments, and other important data from these sources into a clear bulleted list. Tag every bullet with its source(s).

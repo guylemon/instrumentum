@@ -1,0 +1,9 @@
+**Research Topic:**
+{{TOPIC}}
+
+**Synthesized Bullet Points (with source tags):**
+<bullet_points>
+{{BULLETED_LIST}}
+</bullet_points>
+
+Transform the above bullet points into a coherent three-paragraph report following your instructions exactly.

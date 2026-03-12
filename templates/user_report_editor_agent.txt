@@ -1,0 +1,14 @@
+**Research Topic:**
+{{TOPIC}}
+
+**Original Bullet Points (for verification):**
+<bullet_points>
+{{BULLETED_LIST}}
+</bullet_points>
+
+**Draft Report to Revise:**
+<draft_report>
+{{DRAFT_REPORT}}
+</draft_report>
+
+Revise the draft report according to your instructions. Return only the final edited version.
