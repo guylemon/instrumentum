@@ -42,7 +42,7 @@ llm_prompt \
 
 echo "Generate 5 targeted, high-value Google search queries to gather comprehensive information on the following research question: $topic" | llm_msg >> $QUERY_CONTEXT
 
-llm_generate --provider xai --context $QUERY_CONTEXT
+cat $QUERY_CONTEXT | llm_generate --provider xai >> $QUERY_CONTEXT
 
 output=$(tail -1 $QUERY_CONTEXT | llm_display)
 if ! echo $output | jq -e 'type == "array" and length == 5' > /dev/null 2>&1; then
