@@ -13,3 +13,6 @@ style        = { priority = -1, level = "deny" }
 suspicious   = { priority = -1, level = "deny" }
 
 [dependencies]
+
+[lib]
+path = "src/lib.rs"

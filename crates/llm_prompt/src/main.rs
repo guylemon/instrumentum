@@ -3,13 +3,7 @@ use std::{
     process::{self},
 };
 
-type PromptError = Box<dyn std::error::Error>;
-
-struct State {
-    path: Option<String>,
-    variables: HashMap<String, String>,
-    prompt: Option<String>,
-}
+use llm_prompt::substitute;
 
 fn main() {
     let result = parse_args()
@@ -29,7 +23,8 @@ fn main() {
     }
 }
 
-fn parse_args() -> Result<State, PromptError> {
+#[allow(clippy::type_complexity)]
+fn parse_args() -> Result<(Option<String>, HashMap<String, String>), Box<dyn std::error::Error>> {
     let mut path = None;
     let mut variables = HashMap::new();
     let mut args = std::env::args().peekable();
@@ -72,73 +67,36 @@ fn parse_args() -> Result<State, PromptError> {
         }
     }
 
-    Ok(State {
-        path,
-        variables,
-        prompt: None,
-    })
+    Ok((path, variables))
 }
 
-fn validate_args(state: State) -> Result<State, PromptError> {
-    if state.path.is_none() {
+fn validate_args(
+    args: (Option<String>, HashMap<String, String>),
+) -> Result<(String, HashMap<String, String>), Box<dyn std::error::Error>> {
+    let (path, variables) = args;
+    if path.is_none() {
         return Err("missing --template".into());
     }
-    if state.variables.is_empty() {
+    if variables.is_empty() {
         return Err("at least one --var is required".into());
     }
-    Ok(state)
+    Ok((path.unwrap(), variables))
 }
 
-fn load_template(state: State) -> Result<State, PromptError> {
-    let path = state.path.unwrap();
+fn load_template(
+    args: (String, HashMap<String, String>),
+) -> Result<(String, HashMap<String, String>), Box<dyn std::error::Error>> {
+    let (path, variables) = args;
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("failed to read template file '{path}': {e}"))?;
-    Ok(State {
-        path: Some(path),
-        variables: state.variables,
-        prompt: Some(content),
-    })
+    Ok((content, variables))
 }
 
-fn substitute_vars(state: State) -> Result<String, PromptError> {
-    let content = state.prompt.unwrap();
-    let variables = &state.variables;
-
-    let result = content.replace("{{{{", "\x00ESC\x00");
-
-    let mut output = String::new();
-    let chars: Vec<char> = result.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
-            i += 2;
-            let mut var_name = String::new();
-            while i < chars.len() {
-                if chars[i] == '}' && i + 1 < chars.len() && chars[i + 1] == '}' {
-                    i += 2;
-                    break;
-                }
-                var_name.push(chars[i]);
-                i += 1;
-            }
-
-            if var_name.trim().is_empty() {
-                return Err("empty variable name".into());
-            }
-
-            let key = var_name.trim();
-            let value = variables
-                .get(key)
-                .ok_or_else(|| format!("undefined variable: {key}"))?;
-            output.push_str(value);
-        } else {
-            output.push(c);
-            i += 1;
-        }
-    }
-
-    let output = output.replace("\x00ESC\x00", "{");
-    Ok(output)
+fn substitute_vars(
+    args: (String, HashMap<String, String>),
+) -> Result<String, Box<dyn std::error::Error>> {
+    let (content, variables) = args;
+    let result: String = substitute(&content, &variables)
+        .map_err(|e| -> Box<dyn std::error::Error> { format!("{e}").into() })?;
+    Ok(result)
 }
