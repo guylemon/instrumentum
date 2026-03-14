@@ -17,6 +17,51 @@ impl std::fmt::Display for PromptError {
 
 impl std::error::Error for PromptError {}
 
+/// Substitutes template variables in the format `{{variable_name}}` with values from
+/// a provided HashMap.
+///
+/// Variables are identified by double curly braces `{{` and `}}`. The variable name
+/// is extracted from between these delimiters and trimmed of whitespace.
+///
+/// # Escaping
+///
+/// A single `{` character can be escaped by writing four consecutive braces `{{{{`.
+/// This will be replaced with a single `{` in the output. This is useful when you
+/// need to include a literal `{` in your template without it being interpreted as
+/// the start of a variable.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A variable name is empty (e.g., `{{}}`)
+/// - A variable name is not found in the provided `variables` map
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use llm_prompt::substitute;
+///
+/// let mut vars = HashMap::new();
+/// vars.insert("name".to_string(), "World".to_string());
+/// vars.insert("greeting".to_string(), "Hello".to_string());
+///
+/// let template = "Hello {{ name }}! {{ greeting }}, {{ name }}!";
+/// let result = substitute(template, &vars).unwrap();
+/// assert_eq!(result, "Hello World! Hello, World!");
+/// ```
+///
+/// # Escaping Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use llm_prompt::substitute;
+///
+/// let vars: HashMap<String, String> = HashMap::new();
+/// let template = "Escaped: {{{{  literal brace";
+/// let result = substitute(template, &vars).unwrap();
+/// assert_eq!(result, "Escaped: {  literal brace");
+/// ```
 #[allow(clippy::implicit_hasher)]
 #[allow(clippy::missing_errors_doc)]
 pub fn substitute(
