@@ -187,7 +187,7 @@ fn process_input(
                 let result = execute_tool(&name, &args)?;
                 eprintln!("...result: {result}");
                 all_messages.push(Message {
-                    role: "tool".to_string(),
+                    role: llm_msg::Role::Tool,
                     content: result,
                     tool_call_id: id,
                     tool_name: Some(name),

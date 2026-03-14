@@ -2,18 +2,20 @@ use llm_msg::Message;
 use std::env;
 use std::io::{self, Read};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     let (role, msg) = parse_args();
 
     if msg.is_empty() {
         // Fall back to stdin for message
         let mut full_input = String::new();
         io::stdin().read_to_string(&mut full_input).ok();
-        if !full_input.is_empty() {
-            process_input(&full_input, &role);
+        if full_input.is_empty() {
+            Err("LLM message must not be empty".into())
+        } else {
+            process_input(&full_input, &role)
         }
     } else {
-        process_input(&msg, &role);
+        process_input(&msg, &role)
     }
 }
 
@@ -42,9 +44,11 @@ fn parse_args() -> (String, String) {
     (role, msg)
 }
 
-fn process_input(input: &str, role: &str) {
+fn process_input(input: &str, role: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let role = role.parse()?;
     let msg = Message::new(role, input);
     let json = serde_json::to_string(&msg).unwrap();
 
     println!("{json}");
+    Ok(())
 }

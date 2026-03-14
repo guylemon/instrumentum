@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-rm chat.jsonl
+rm -f chat.jsonl
 
 while true; do
   read -p '> ' prompt
