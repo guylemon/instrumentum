@@ -6,7 +6,7 @@ use std::time::Duration;
 
 #[derive(Clone)]
 enum Provider {
-    Ollama,
+    Ollama { model: String },
     Xai { api_key: String, model: String },
 }
 
@@ -54,17 +54,25 @@ struct FunctionDef {
 
 fn parse_args() -> (Provider, bool, Option<String>) {
     let args: Vec<String> = std::env::args().collect();
-    let mut provider = Provider::Ollama;
+    let mut model: Option<String> = None;
     let mut tools_enabled = false;
     let mut context_file = None;
 
     for i in 0..args.len().saturating_sub(1) {
+        if args[i] == "--model" {
+            model = Some(args[i + 1].clone());
+        }
         if args[i] == "--provider" && args[i + 1] == "xai" {
             let api_key = std::env::var("XAI_API_KEY")
                 .expect("XAI_API_KEY environment variable must be set when using --provider xai");
-            let model = std::env::var("XAI_MODEL")
-                .unwrap_or_else(|_| "grok-4-1-fast-reasoning".to_string());
-            provider = Provider::Xai { api_key, model };
+            let model = model
+                .or_else(|| std::env::var("XAI_MODEL").ok())
+                .unwrap_or_else(|| "grok-4-1-fast-reasoning".to_string());
+            return (
+                Provider::Xai { api_key, model },
+                tools_enabled,
+                context_file,
+            );
         }
         if args[i] == "--tools" {
             tools_enabled = true;
@@ -74,7 +82,11 @@ fn parse_args() -> (Provider, bool, Option<String>) {
         }
     }
 
-    (provider, tools_enabled, context_file)
+    let model = model
+        .or_else(|| std::env::var("OLLAMA_MODEL").ok())
+        .unwrap_or_else(|| "qwen3:8b".to_string());
+
+    (Provider::Ollama { model }, tools_enabled, context_file)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -272,7 +284,7 @@ fn chat_with_llm(
     provider: Provider,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     match provider {
-        Provider::Ollama => chat_with_ollama(client, messages, tools),
+        Provider::Ollama { model } => chat_with_ollama(client, messages, tools, &model),
         Provider::Xai { api_key, model } => {
             chat_with_xai(client, messages, tools, &api_key, &model)
         }
@@ -283,9 +295,10 @@ fn chat_with_ollama(
     client: &reqwest::blocking::Client,
     messages: Vec<Message>,
     tools: Option<Vec<Tool>>,
+    model: &str,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     let request = ChatRequest {
-        model: "qwen3:8b".to_string(),
+        model: model.to_string(),
         messages,
         tools,
         options: ChatRequestOptions { temperature: 0 },
