@@ -18,7 +18,7 @@ impl std::fmt::Display for PromptError {
 impl std::error::Error for PromptError {}
 
 /// Substitutes template variables in the format `{{variable_name}}` with values from
-/// a provided HashMap.
+/// a provided `HashMap`.
 ///
 /// Variables are identified by double curly braces `{{` and `}}`. The variable name
 /// is extracted from between these delimiters and trimmed of whitespace.

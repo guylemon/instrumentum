@@ -910,6 +910,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm_embed"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "llm_generate"
 version = "0.1.0"
 dependencies = [
