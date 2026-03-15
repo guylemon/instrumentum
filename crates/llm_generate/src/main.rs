@@ -1,4 +1,4 @@
-use llm_generate::{generate, Message, Provider};
+use llm_generate::{Message, Provider, generate};
 use std::io::{self, Write};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
