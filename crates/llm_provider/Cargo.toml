@@ -1,7 +1,7 @@
 [package]
-name = "webfetch"
+name = "llm_provider"
 version = "0.1.0"
-description = "retrieve the contents of a website as markdown and save to local cache"
+description = "Collection of supported LLM providers"
 edition = "2024"
 
 [lints.clippy]
@@ -13,15 +13,11 @@ style        = { priority = -1, level = "deny" }
 suspicious   = { priority = -1, level = "deny" }
 
 [dependencies]
-dirs = "5"
-reqwest = { version = "0.12", features = ["json", "blocking"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-md5 = "0.7"
-readability = "0.3"
-html-to-markdown-rs = "2"
-
-llm_provider = { path = "../llm_provider" }
+llm_msg = { path = "../llm_msg" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [lib]
 path = "src/lib.rs"
+
+

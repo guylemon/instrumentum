@@ -923,9 +923,12 @@ name = "llm_generate"
 version = "0.1.0"
 dependencies = [
  "llm_msg",
+ "llm_provider",
  "reqwest 0.13.2",
  "serde",
  "serde_json",
+ "webfetch",
+ "websearch",
 ]
 
 [[package]]
@@ -939,6 +942,15 @@ dependencies = [
 [[package]]
 name = "llm_prompt"
 version = "0.1.0"
+
+[[package]]
+name = "llm_provider"
+version = "0.1.0"
+dependencies = [
+ "llm_msg",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "lock_api"
@@ -2457,6 +2469,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "html-to-markdown-rs",
+ "llm_provider",
  "md5",
  "readability",
  "reqwest 0.12.28",
@@ -2477,6 +2490,7 @@ dependencies = [
 name = "websearch"
 version = "0.1.0"
 dependencies = [
+ "llm_provider",
  "reqwest 0.13.2",
  "serde",
  "serde_json",
