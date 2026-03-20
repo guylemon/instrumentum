@@ -91,8 +91,9 @@ fn chat_with_ollama(
     chat_request: &ChatRequest,
     config: &Config,
 ) -> Result<Message, Box<dyn std::error::Error>> {
+    let url = format!("{}/chat", config.base_url);
     let response = client
-        .post(config.base_url.clone())
+        .post(url)
         .json(&chat_request)
         .send()
         .map_err(|e| {
