@@ -1,28 +1,12 @@
-pub use llm_msg::Message;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use llm_provider::Config;
+use serde::{Deserialize};
 use std::io::Write;
 use std::time::Duration;
 
-#[derive(Clone)]
-pub enum Provider {
-    Ollama { model: String },
-    Xai { api_key: String, model: String },
-}
-
-#[derive(Serialize)]
-pub struct ChatRequestOptions {
-    pub temperature: u8,
-}
-
-#[derive(Serialize)]
-pub struct ChatRequest {
-    pub model: String,
-    pub messages: Vec<Message>,
-    pub options: ChatRequestOptions,
-    pub stream: bool,
-    pub tools: Option<Vec<Tool>>,
-}
+pub use llm_msg::Message;
+use llm_provider::ChatRequest;
+use llm_provider::Provider;
+use llm_provider::Tool;
 
 #[derive(Deserialize)]
 struct ChatResponse {
@@ -39,82 +23,20 @@ struct XaiChoice {
     message: Message,
 }
 
-#[derive(Serialize, Clone)]
-pub struct Tool {
-    pub r#type: String,
-    pub function: FunctionDef,
-}
-
-#[derive(Serialize, Clone)]
-pub struct FunctionDef {
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value,
-}
-
 /// Generate a response from an LLM using the provided messages and tools.
 /// # Errors
 /// Returns an error if the LLM request fails or returns an invalid response.
 pub fn generate(
-    messages: Vec<Message>,
-    tools_enabled: bool,
+    chat_request: &ChatRequest,
     provider: &Provider,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(120))
         .build()?;
 
-    let tools = if tools_enabled {
-        vec![Tool {
-            r#type: "function".to_string(),
-            function: FunctionDef {
-                name: "websearch".to_string(),
-                description: "Search the web using SearxNG. Input should be an array of search queries.".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "queries": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Search queries"
-                        }
-                    },
-                    "required": ["queries"]
-                }),
-            },
-        },
-        Tool {
-            r#type: "function".to_string(),
-            function: FunctionDef {
-                name: "webfetch".to_string(),
-                description: "Fetch the content of URLs and convert to markdown. Use this after a web search when you want to get more detailed content from specific URLs.".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "urls": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "URLs to fetch content from"
-                        }
-                    },
-                    "required": ["urls"]
-                }),
-            },
-        }]
-    } else {
-        vec![]
-    };
-
-    let tools = if tools_enabled { Some(tools) } else { None };
-
-    let mut all_messages = messages;
+    let mut all_messages = chat_request.messages.clone();
     let final_response = loop {
-        let response = chat_with_llm(
-            &client,
-            all_messages.clone(),
-            tools.clone(),
-            provider.clone(),
-        )?;
+        let response = chat_with_llm(&client, chat_request, provider)?;
         all_messages.push(response.clone());
 
         if let Some(ref tool_calls) = response.tool_calls {
@@ -146,37 +68,32 @@ pub fn generate(
     Ok(final_response)
 }
 
+// TODO refactor chat_with_xai to use ChatRequest
 fn chat_with_llm(
     client: &reqwest::blocking::Client,
-    messages: Vec<Message>,
-    tools: Option<Vec<Tool>>,
-    provider: Provider,
+    chat_request: &ChatRequest,
+    provider: &Provider,
 ) -> Result<Message, Box<dyn std::error::Error>> {
     match provider {
-        Provider::Ollama { model } => chat_with_ollama(client, messages, tools, &model),
-        Provider::Xai { api_key, model } => {
-            chat_with_xai(client, messages, tools, &api_key, &model)
-        }
+        Provider::Ollama(config) => chat_with_ollama(client, chat_request, config),
+        Provider::Xai { api_key, model } => chat_with_xai(
+            client,
+            &chat_request.messages,
+            chat_request.tools.as_ref(),
+            api_key,
+            model,
+        ),
     }
 }
 
 fn chat_with_ollama(
     client: &reqwest::blocking::Client,
-    messages: Vec<Message>,
-    tools: Option<Vec<Tool>>,
-    model: &str,
+    chat_request: &ChatRequest,
+    config: &Config,
 ) -> Result<Message, Box<dyn std::error::Error>> {
-    let request = ChatRequest {
-        model: model.to_string(),
-        messages,
-        tools,
-        options: ChatRequestOptions { temperature: 0 },
-        stream: false,
-    };
-
     let response = client
-        .post("http://localhost:11434/api/chat")
-        .json(&request)
+        .post(config.base_url.clone())
+        .json(&chat_request)
         .send()
         .map_err(|e| {
             format!("Request failed: {e} (hint: check if Ollama is running and has enough memory)",)
@@ -199,18 +116,18 @@ fn chat_with_ollama(
 
 fn chat_with_xai(
     client: &reqwest::blocking::Client,
-    messages: Vec<Message>,
-    tools: Option<Vec<Tool>>,
+    messages: &[Message],
+    tools: Option<&Vec<Tool>>,
     api_key: &str,
     model: &str,
 ) -> Result<Message, Box<dyn std::error::Error>> {
-    let request = ChatRequest {
-        model: model.to_string(),
-        messages,
-        tools,
-        options: ChatRequestOptions { temperature: 0 },
-        stream: false,
-    };
+    let default_tools = vec![];
+    let tools = tools.unwrap_or(&default_tools);
+    let request = ChatRequest::builder(model)
+        .messages(messages.to_vec())
+        .tools(tools.clone())
+        .options(llm_provider::Options::recommended())
+        .build()?;
 
     let response = client
         .post("https://api.x.ai/v1/chat/completions")
@@ -235,6 +152,7 @@ fn chat_with_xai(
     }
 }
 
+// TODO move tool execution code to tools. Could just be tool.execute(args) or something.
 fn execute_tool(
     name: &str,
     args: &serde_json::Value,

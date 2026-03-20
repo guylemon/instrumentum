@@ -1,4 +1,8 @@
-use llm_generate::{Message, Provider, generate};
+// TODO try ureq for http
+// TODO try spawning threads for concurrency
+// use std::thread::yield_now
+use llm_generate::{Message, generate};
+use llm_provider::{ChatRequest, Provider};
 use std::io::{self, Write};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,11 +58,11 @@ fn parse_args() -> (Provider, bool, Option<String>) {
         }
     }
 
-    let model = model
-        .or_else(|| std::env::var("OLLAMA_MODEL").ok())
-        .unwrap_or_else(|| "qwen3:8b".to_string());
+    // Use default url for Ollama
+    // TODO use ::default() after implementing in llm_provider
+    let config = llm_provider::Config::new(None);
 
-    (Provider::Ollama { model }, tools_enabled, context_file)
+    (Provider::Ollama(config), tools_enabled, context_file)
 }
 
 fn process_input(
@@ -66,6 +70,8 @@ fn process_input(
     provider: &Provider,
     tools_enabled: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let model = std::env::var("OLLAMA_MODEL").unwrap_or("qwen3:8b".to_string());
+
     let messages: Vec<Message> = input
         .iter()
         .map(|s| {
@@ -74,7 +80,19 @@ fn process_input(
         })
         .collect();
 
-    let final_response = generate(messages, tools_enabled, provider)?;
+    let tools = if tools_enabled {
+        vec![websearch::tool_def(), webfetch::tool_def()]
+    } else {
+        vec![]
+    };
+
+    let chat_request = ChatRequest::builder(model)
+        .messages(messages)
+        .options(llm_provider::Options::recommended())
+        .tools(tools)
+        .build()?;
+
+    let final_response = generate(&chat_request, provider)?;
 
     let json = serde_json::to_string(&final_response)?;
 
