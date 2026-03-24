@@ -4,6 +4,7 @@ mod ollama;
 pub use ollama::ChatRequest;
 pub use ollama::ChatRequestBuilder;
 pub use ollama::Config;
+pub use ollama::Format;
 pub use ollama::FunctionDef;
 pub use ollama::Options;
 pub use ollama::Tool;
