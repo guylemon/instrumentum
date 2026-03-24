@@ -84,6 +84,13 @@ impl ChatRequestBuilder {
 impl ChatRequestBuilder {
     /// Append chat messages to chat request
     #[must_use]
+    pub fn format(mut self, format: Format) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    /// Append chat messages to chat request
+    #[must_use]
     pub fn messages(mut self, messages: Vec<Message>) -> Self {
         self.messages.extend(messages);
         self
@@ -199,5 +206,38 @@ impl ChatRequestBuilder {
             think: self.think,
             tools: self.tools,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_request_with_format(format: Format) -> ChatRequest {
+        ChatRequest::builder("llama3")
+            .add_user_message("Hello")
+            .format(format)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_builder_with_format_json() {
+        let request = build_request_with_format(Format::Json);
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains(r#""format":"json""#));
+    }
+
+    #[test]
+    fn test_builder_with_format_schema() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"}
+            }
+        });
+        let request = build_request_with_format(Format::Schema(schema));
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"format\""));
     }
 }
