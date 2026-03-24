@@ -1,6 +1,7 @@
 use llm_msg::{Message, Role};
 use serde::{Deserialize, Serialize};
 
+use crate::ollama::Format;
 use crate::ollama::Options;
 use crate::ollama::Think;
 use crate::ollama::ThinkLevel;
@@ -8,6 +9,10 @@ use crate::ollama::Tool;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatRequest {
+    /// Provide a JSON schema to the format field to request structured output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<Format>,
+
     /// Chat history as an array of messages
     pub messages: Vec<Message>,
 
@@ -36,6 +41,7 @@ impl ChatRequest {
     /// custom options, use `ChatRequestBuilder`.
     pub fn new(model: impl Into<String>, messages: Vec<Message>) -> Self {
         Self {
+            format: None,
             messages,
             model: model.into(),
             options: None,
@@ -52,6 +58,7 @@ impl ChatRequest {
 
 #[derive(Debug)]
 pub struct ChatRequestBuilder {
+    format: Option<Format>,
     messages: Vec<Message>,
     model: String,
     options: Option<Options>,
@@ -63,6 +70,7 @@ pub struct ChatRequestBuilder {
 impl ChatRequestBuilder {
     pub fn new(model: impl Into<String>) -> Self {
         Self {
+            format: None,
             messages: Vec::new(),
             model: model.into(),
             options: None,
@@ -183,6 +191,7 @@ impl ChatRequestBuilder {
         }
 
         Ok(ChatRequest {
+            format: self.format,
             messages: self.messages,
             model: self.model,
             options: self.options,
